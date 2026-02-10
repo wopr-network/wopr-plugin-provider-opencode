@@ -1,12 +1,14 @@
 {
-  "name": "wopr-plugin-provider-opencode",
-  "version": "1.1.0",
+  "author": "",
+  "dependencies": {
+    "@opencode-ai/sdk": "^0.1.0",
+    "winston": "^3.11.0"
+  },
   "description": "OpenCode AI provider plugin for WOPR",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build"
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
   },
   "keywords": [
     "wopr",
@@ -15,24 +17,27 @@
     "opencode",
     "ai-coding"
   ],
-  "author": "",
   "license": "MIT",
+  "main": "index.js",
+  "name": "wopr-plugin-provider-opencode",
   "peerDependencies": {
     "wopr": "^0.0.1"
   },
-  "dependencies": {
-    "@opencode-ai/sdk": "^0.1.0",
-    "winston": "^3.11.0"
+  "scripts": {
+    "build": "tsc",
+    "check": "biome check src/ && tsc --noEmit",
+    "format": "biome format --write src/",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --fix src/",
+    "prepublishOnly": "npm run build"
   },
-  "devDependencies": {
-    "@types/node": "^18.0.0",
-    "typescript": "^5.0.0"
-  },
+  "type": "module",
+  "version": "1.1.0",
   "wopr": {
     "plugin": {
-      "name": "provider-opencode",
       "category": "provider",
-      "description": "OpenCode AI SDK for coding tasks"
+      "description": "OpenCode AI SDK for coding tasks",
+      "name": "provider-opencode"
     }
   }
 }
