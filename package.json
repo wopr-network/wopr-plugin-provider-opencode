@@ -19,7 +19,7 @@
   ],
   "license": "MIT",
   "main": "index.js",
-  "name": "wopr-plugin-provider-opencode",
+  "name": "@wopr-network/wopr-plugin-provider-opencode",
   "peerDependencies": {
     "wopr": "^0.0.1"
   },
@@ -39,5 +39,11 @@
       "description": "OpenCode AI SDK for coding tasks",
       "name": "provider-opencode"
     }
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ]
 }
