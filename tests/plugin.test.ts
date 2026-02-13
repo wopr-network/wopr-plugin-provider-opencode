@@ -15,7 +15,7 @@ vi.mock("@opencode-ai/sdk", () => ({
       }),
     },
   })),
-}));
+}), { virtual: true });
 
 // Mock winston to avoid console noise in tests
 vi.mock("winston", () => {
@@ -46,7 +46,7 @@ describe("wopr-plugin-provider-opencode", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     // Dynamic import to get fresh module after mocks are set up
-    const mod = await import("../index.js");
+    const mod = await import("../index.ts");
     plugin = mod.default;
   });
 
