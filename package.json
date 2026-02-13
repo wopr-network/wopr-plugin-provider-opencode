@@ -5,7 +5,7 @@
     "winston": "^3.11.0"
   },
   "optionalDependencies": {
-    "@opencode-ai/sdk": "^0.1.0"
+    "@opencode-ai/sdk": "^1.1.64"
   },
   "description": "OpenCode AI provider plugin for WOPR",
   "devDependencies": {
