@@ -1,6 +1,7 @@
 {
   "author": "",
   "dependencies": {
+    "@wopr-network/plugin-types": "^0.1.0",
     "winston": "^3.11.0"
   },
   "optionalDependencies": {
@@ -21,7 +22,8 @@
     "ai-coding"
   ],
   "license": "MIT",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "name": "@wopr-network/wopr-plugin-provider-opencode",
   "peerDependencies": {
     "wopr": "^0.0.1"

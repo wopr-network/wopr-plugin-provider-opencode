@@ -46,7 +46,7 @@ describe("wopr-plugin-provider-opencode", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     // Dynamic import to get fresh module after mocks are set up
-    const mod = await import("../index.ts");
+    const mod = await import("../src/index.ts");
     plugin = mod.default;
   });
 
