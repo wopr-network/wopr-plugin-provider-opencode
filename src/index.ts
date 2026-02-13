@@ -7,30 +7,17 @@
  */
 
 import winston from "winston";
+import type {
+  A2AServerConfig,
+  ConfigSchema,
+  PluginManifest,
+  WOPRPlugin,
+  WOPRPluginContext,
+} from "./types.js";
 
-// Type definitions (peer dependency from wopr)
-interface A2AToolResult {
-  content: Array<{
-    type: "text" | "image" | "resource";
-    text?: string;
-    data?: string;
-    mimeType?: string;
-  }>;
-  isError?: boolean;
-}
-
-interface A2AToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  handler: (args: Record<string, unknown>) => Promise<A2AToolResult>;
-}
-
-interface A2AServerConfig {
-  name: string;
-  version?: string;
-  tools: A2AToolDefinition[];
-}
+// ---------------------------------------------------------------------------
+// Provider-specific interfaces (not part of plugin-types)
+// ---------------------------------------------------------------------------
 
 interface ModelQueryOptions {
   prompt: string;
@@ -64,84 +51,82 @@ interface ModelProvider {
   getCredentialType(): "api-key" | "oauth" | "custom";
 }
 
-interface ConfigField {
-  name: string;
-  type: string;
-  label: string;
-  placeholder?: string;
-  required?: boolean;
-  description?: string;
-  options?: Array<{ value: string; label: string }>;
-  default?: unknown;
-}
+// ---------------------------------------------------------------------------
+// Logger
+// ---------------------------------------------------------------------------
 
-interface ConfigSchema {
-  title: string;
-  description: string;
-  fields: ConfigField[];
-}
-
-interface WOPRPluginContext {
-  log: { info: (msg: string) => void };
-  registerProvider: (provider: ModelProvider) => void;
-  registerConfigSchema: (name: string, schema: ConfigSchema) => void;
-}
-
-interface WOPRPlugin {
-  name: string;
-  version: string;
-  description: string;
-  init(ctx: WOPRPluginContext): Promise<void>;
-  shutdown(): Promise<void>;
-}
-
-// Setup winston logger
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
-    winston.format.json()
+    winston.format.json(),
   ),
   defaultMeta: { service: "wopr-plugin-provider-opencode" },
-  transports: [
-    new winston.transports.Console({ level: "warn" })
-  ],
+  transports: [new winston.transports.Console({ level: "warn" })],
 });
+
+// ---------------------------------------------------------------------------
+// OpenCode SDK lazy-loader
+// ---------------------------------------------------------------------------
 
 let OpencodeSDK: any;
 
-/**
- * Lazy load OpenCode SDK
- */
 async function loadOpencodeSDK() {
   if (!OpencodeSDK) {
     try {
       const opencode = await import("@opencode-ai/sdk");
       OpencodeSDK = opencode;
     } catch (error) {
-      throw new Error(
-        "OpenCode SDK not installed. Run: npm install @opencode-ai/sdk"
-      );
+      throw new Error("OpenCode SDK not installed. Run: npm install @opencode-ai/sdk");
     }
   }
   return OpencodeSDK;
 }
 
-/**
- * OpenCode provider implementation
- */
+// ---------------------------------------------------------------------------
+// Config schema
+// ---------------------------------------------------------------------------
+
+const configSchema: ConfigSchema = {
+  title: "OpenCode",
+  description: "Configure OpenCode server connection",
+  fields: [
+    {
+      name: "serverUrl",
+      type: "text",
+      label: "Server URL",
+      placeholder: "http://localhost:4096",
+      default: "http://localhost:4096",
+      required: true,
+      description: "OpenCode server URL (must be running)",
+    },
+    {
+      name: "model",
+      type: "select",
+      label: "Default Model",
+      options: [
+        { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
+        { value: "claude-3-5-haiku", label: "Claude 3.5 Haiku" },
+        { value: "gpt-4o", label: "GPT-4o" },
+        { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+      ],
+      default: "claude-3-5-sonnet",
+      description: "Default model to use for new sessions",
+    },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Provider implementation
+// ---------------------------------------------------------------------------
+
 const opencodeProvider: ModelProvider = {
   id: "opencode",
   name: "OpenCode",
   description: "OpenCode AI SDK with A2A/MCP support",
   defaultModel: "claude-3-5-sonnet",
-  supportedModels: [
-    "claude-3-5-sonnet",
-    "claude-3-5-haiku",
-    "gpt-4o",
-    "gpt-4o-mini",
-  ],
+  supportedModels: ["claude-3-5-sonnet", "claude-3-5-haiku", "gpt-4o", "gpt-4o-mini"],
 
   async validateCredentials(credential: string): Promise<boolean> {
     try {
@@ -159,7 +144,7 @@ const opencodeProvider: ModelProvider = {
 
   async createClient(
     credential: string,
-    options?: Record<string, unknown>
+    options?: Record<string, unknown>,
   ): Promise<ModelClient> {
     return new OpencodeClient(credential, options);
   },
@@ -169,16 +154,17 @@ const opencodeProvider: ModelProvider = {
   },
 };
 
-/**
- * OpenCode client implementation with A2A support
- */
+// ---------------------------------------------------------------------------
+// Client implementation
+// ---------------------------------------------------------------------------
+
 class OpencodeClient implements ModelClient {
   private client: any;
   private sessionId: string | null = null;
 
   constructor(
     private credential: string,
-    private options?: Record<string, unknown>
+    private options?: Record<string, unknown>,
   ) {}
 
   private async getClient() {
@@ -198,9 +184,7 @@ class OpencodeClient implements ModelClient {
     try {
       if (!this.sessionId) {
         const session = await client.session.create({
-          body: {
-            title: `WOPR Session ${Date.now()}`,
-          },
+          body: { title: `WOPR Session ${Date.now()}` },
         });
         this.sessionId = session.data?.id;
         logger.info(`[opencode] Session created: ${this.sessionId}`);
@@ -210,18 +194,16 @@ class OpencodeClient implements ModelClient {
         throw new Error("Failed to create OpenCode session");
       }
 
-      // Yield session ID for resumption support
       yield { type: "system", subtype: "init", session_id: this.sessionId };
 
       let promptText = opts.prompt;
       if (opts.images && opts.images.length > 0) {
-        const imageList = opts.images.map((url, i) => `[Image ${i + 1}]: ${url}`).join('\n');
+        const imageList = opts.images.map((url, i) => `[Image ${i + 1}]: ${url}`).join("\n");
         promptText = `[User has shared ${opts.images.length} image(s)]\n${imageList}\n\n${opts.prompt}`;
       }
 
       const parts: any[] = [{ type: "text", text: promptText }];
 
-      // Build prompt options
       const promptOptions: any = {
         model: opts.model
           ? { providerID: "anthropic", modelID: opts.model }
@@ -229,7 +211,7 @@ class OpencodeClient implements ModelClient {
         parts,
       };
 
-      // A2A tools - pass as custom tools if supported
+      // A2A tools
       if (opts.a2aServers && Object.keys(opts.a2aServers).length > 0) {
         const allTools: string[] = [];
         for (const [serverName, config] of Object.entries(opts.a2aServers)) {
@@ -243,10 +225,7 @@ class OpencodeClient implements ModelClient {
 
       // Allowed tools
       if (opts.allowedTools && opts.allowedTools.length > 0) {
-        promptOptions.enabledTools = [
-          ...(promptOptions.enabledTools || []),
-          ...opts.allowedTools
-        ];
+        promptOptions.enabledTools = [...(promptOptions.enabledTools || []), ...opts.allowedTools];
         logger.info(`[opencode] Allowed tools: ${opts.allowedTools.join(", ")}`);
       }
 
@@ -262,30 +241,22 @@ class OpencodeClient implements ModelClient {
           if (part.type === "text") {
             yield {
               type: "assistant",
-              message: {
-                content: [{ type: "text", text: part.text }],
-              },
+              message: { content: [{ type: "text", text: part.text }] },
             };
           } else if (part.type === "tool_use" || part.type === "tool_call") {
             yield {
               type: "assistant",
-              message: {
-                content: [{ type: "tool_use", name: part.name }],
-              },
+              message: { content: [{ type: "tool_use", name: part.name }] },
             };
           }
         }
 
-        yield {
-          type: "result",
-          subtype: "success",
-          total_cost_usd: 0,
-        };
+        yield { type: "result", subtype: "success", total_cost_usd: 0 };
       }
     } catch (error) {
       logger.error("[opencode] Query failed:", error);
       throw new Error(
-        `OpenCode query failed: ${error instanceof Error ? error.message : String(error)}`
+        `OpenCode query failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -306,48 +277,44 @@ class OpencodeClient implements ModelClient {
   }
 }
 
-/**
- * Plugin export
- */
+// ---------------------------------------------------------------------------
+// Manifest
+// ---------------------------------------------------------------------------
+
+const manifest: PluginManifest = {
+  name: "wopr-plugin-provider-opencode",
+  version: "1.1.0",
+  description: "OpenCode AI provider for WOPR with A2A/MCP support",
+  author: "WOPR",
+  license: "MIT",
+  repository: "https://github.com/wopr-network/wopr-plugin-provider-opencode",
+  capabilities: ["provider"],
+  category: "ai-provider",
+  tags: ["ai", "opencode", "provider", "a2a", "mcp"],
+  icon: "🤖",
+  requires: {
+    network: { outbound: true },
+    services: ["opencode"],
+  },
+  configSchema,
+};
+
+// ---------------------------------------------------------------------------
+// Plugin export
+// ---------------------------------------------------------------------------
+
 const plugin: WOPRPlugin = {
   name: "provider-opencode",
-  version: "1.1.0", // Bumped for A2A support
+  version: "1.1.0",
   description: "OpenCode AI provider for WOPR with A2A/MCP support",
+  manifest,
 
   async init(ctx: WOPRPluginContext) {
     ctx.log.info("Registering OpenCode provider...");
     ctx.registerProvider(opencodeProvider);
     ctx.log.info("OpenCode provider registered (supports A2A/MCP)");
 
-    // Register config schema for UI
-    ctx.registerConfigSchema("provider-opencode", {
-      title: "OpenCode",
-      description: "Configure OpenCode server connection",
-      fields: [
-        {
-          name: "serverUrl",
-          type: "text",
-          label: "Server URL",
-          placeholder: "http://localhost:4096",
-          default: "http://localhost:4096",
-          required: true,
-          description: "OpenCode server URL (must be running)",
-        },
-        {
-          name: "model",
-          type: "select",
-          label: "Default Model",
-          options: [
-            { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
-            { value: "claude-3-5-haiku", label: "Claude 3.5 Haiku" },
-            { value: "gpt-4o", label: "GPT-4o" },
-            { value: "gpt-4o-mini", label: "GPT-4o Mini" },
-          ],
-          default: "claude-3-5-sonnet",
-          description: "Default model to use for new sessions",
-        },
-      ],
-    });
+    ctx.registerConfigSchema("provider-opencode", configSchema);
     ctx.log.info("Registered OpenCode config schema");
   },
 
