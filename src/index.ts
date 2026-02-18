@@ -6,49 +6,57 @@
  * Install: wopr plugin install wopr-plugin-provider-opencode
  */
 
+import type { OpencodeClientInstance } from "@opencode-ai/sdk";
 import winston from "winston";
 import type {
-  A2AServerConfig,
-  ConfigSchema,
-  PluginManifest,
-  WOPRPlugin,
-  WOPRPluginContext,
+	A2AServerConfig,
+	ConfigSchema,
+	PluginManifest,
+	WOPRPlugin,
+	WOPRPluginContext,
 } from "./types.js";
+
+type OpencodeModule = {
+	createOpencodeClient: typeof import("@opencode-ai/sdk").createOpencodeClient;
+};
 
 // ---------------------------------------------------------------------------
 // Provider-specific interfaces (not part of plugin-types)
 // ---------------------------------------------------------------------------
 
 interface ModelQueryOptions {
-  prompt: string;
-  systemPrompt?: string;
-  resume?: string;
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
-  topP?: number;
-  images?: string[];
-  tools?: string[];
-  a2aServers?: Record<string, A2AServerConfig>;
-  allowedTools?: string[];
-  providerOptions?: Record<string, unknown>;
+	prompt: string;
+	systemPrompt?: string;
+	resume?: string;
+	model?: string;
+	temperature?: number;
+	maxTokens?: number;
+	topP?: number;
+	images?: string[];
+	tools?: string[];
+	a2aServers?: Record<string, A2AServerConfig>;
+	allowedTools?: string[];
+	providerOptions?: Record<string, unknown>;
 }
 
 interface ModelClient {
-  query(options: ModelQueryOptions): AsyncGenerator<unknown>;
-  listModels(): Promise<string[]>;
-  healthCheck(): Promise<boolean>;
+	query(options: ModelQueryOptions): AsyncGenerator<unknown>;
+	listModels(): Promise<string[]>;
+	healthCheck(): Promise<boolean>;
 }
 
 interface ModelProvider {
-  id: string;
-  name: string;
-  description: string;
-  defaultModel: string;
-  supportedModels: string[];
-  validateCredentials(credentials: string): Promise<boolean>;
-  createClient(credential: string, options?: Record<string, unknown>): Promise<ModelClient>;
-  getCredentialType(): "api-key" | "oauth" | "custom";
+	id: string;
+	name: string;
+	description: string;
+	defaultModel: string;
+	supportedModels: string[];
+	validateCredentials(credentials: string): Promise<boolean>;
+	createClient(
+		credential: string,
+		options?: Record<string, unknown>,
+	): Promise<ModelClient>;
+	getCredentialType(): "api-key" | "oauth" | "custom";
 }
 
 // ---------------------------------------------------------------------------
@@ -56,32 +64,34 @@ interface ModelProvider {
 // ---------------------------------------------------------------------------
 
 const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json(),
-  ),
-  defaultMeta: { service: "wopr-plugin-provider-opencode" },
-  transports: [new winston.transports.Console({ level: "warn" })],
+	level: "info",
+	format: winston.format.combine(
+		winston.format.timestamp(),
+		winston.format.errors({ stack: true }),
+		winston.format.json(),
+	),
+	defaultMeta: { service: "wopr-plugin-provider-opencode" },
+	transports: [new winston.transports.Console({ level: "warn" })],
 });
 
 // ---------------------------------------------------------------------------
 // OpenCode SDK lazy-loader
 // ---------------------------------------------------------------------------
 
-let OpencodeSDK: any;
+let OpencodeSDK: OpencodeModule | undefined;
 
 async function loadOpencodeSDK() {
-  if (!OpencodeSDK) {
-    try {
-      const opencode = await import("@opencode-ai/sdk");
-      OpencodeSDK = opencode;
-    } catch (error) {
-      throw new Error("OpenCode SDK not installed. Run: npm install @opencode-ai/sdk");
-    }
-  }
-  return OpencodeSDK;
+	if (!OpencodeSDK) {
+		try {
+			const opencode = await import("@opencode-ai/sdk");
+			OpencodeSDK = opencode;
+		} catch (_error) {
+			throw new Error(
+				"OpenCode SDK not installed. Run: npm install @opencode-ai/sdk",
+			);
+		}
+	}
+	return OpencodeSDK;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,32 +99,32 @@ async function loadOpencodeSDK() {
 // ---------------------------------------------------------------------------
 
 const configSchema: ConfigSchema = {
-  title: "OpenCode",
-  description: "Configure OpenCode server connection",
-  fields: [
-    {
-      name: "serverUrl",
-      type: "text",
-      label: "Server URL",
-      placeholder: "http://localhost:4096",
-      default: "http://localhost:4096",
-      required: true,
-      description: "OpenCode server URL (must be running)",
-    },
-    {
-      name: "model",
-      type: "select",
-      label: "Default Model",
-      options: [
-        { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
-        { value: "claude-3-5-haiku", label: "Claude 3.5 Haiku" },
-        { value: "gpt-4o", label: "GPT-4o" },
-        { value: "gpt-4o-mini", label: "GPT-4o Mini" },
-      ],
-      default: "claude-3-5-sonnet",
-      description: "Default model to use for new sessions",
-    },
-  ],
+	title: "OpenCode",
+	description: "Configure OpenCode server connection",
+	fields: [
+		{
+			name: "serverUrl",
+			type: "text",
+			label: "Server URL",
+			placeholder: "http://localhost:4096",
+			default: "http://localhost:4096",
+			required: true,
+			description: "OpenCode server URL (must be running)",
+		},
+		{
+			name: "model",
+			type: "select",
+			label: "Default Model",
+			options: [
+				{ value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
+				{ value: "claude-3-5-haiku", label: "Claude 3.5 Haiku" },
+				{ value: "gpt-4o", label: "GPT-4o" },
+				{ value: "gpt-4o-mini", label: "GPT-4o Mini" },
+			],
+			default: "claude-3-5-sonnet",
+			description: "Default model to use for new sessions",
+		},
+	],
 };
 
 // ---------------------------------------------------------------------------
@@ -122,36 +132,41 @@ const configSchema: ConfigSchema = {
 // ---------------------------------------------------------------------------
 
 const opencodeProvider: ModelProvider = {
-  id: "opencode",
-  name: "OpenCode",
-  description: "OpenCode AI SDK with A2A/MCP support",
-  defaultModel: "claude-3-5-sonnet",
-  supportedModels: ["claude-3-5-sonnet", "claude-3-5-haiku", "gpt-4o", "gpt-4o-mini"],
+	id: "opencode",
+	name: "OpenCode",
+	description: "OpenCode AI SDK with A2A/MCP support",
+	defaultModel: "claude-3-5-sonnet",
+	supportedModels: [
+		"claude-3-5-sonnet",
+		"claude-3-5-haiku",
+		"gpt-4o",
+		"gpt-4o-mini",
+	],
 
-  async validateCredentials(credential: string): Promise<boolean> {
-    try {
-      const opencode = await loadOpencodeSDK();
-      const client = opencode.createOpencodeClient({
-        baseUrl: credential || "http://localhost:4096",
-      });
-      const health = await client.global.health();
-      return health.data?.healthy === true;
-    } catch (error) {
-      logger.error("[opencode] Credential validation failed:", error);
-      return true; // Allow anyway, server might not be running yet
-    }
-  },
+	async validateCredentials(credential: string): Promise<boolean> {
+		try {
+			const opencode = await loadOpencodeSDK();
+			const client = opencode.createOpencodeClient({
+				baseUrl: credential || "http://localhost:4096",
+			});
+			const health = await client.global.health();
+			return health.data?.healthy === true;
+		} catch (error) {
+			logger.error("[opencode] Credential validation failed:", error);
+			return true; // Allow anyway, server might not be running yet
+		}
+	},
 
-  async createClient(
-    credential: string,
-    options?: Record<string, unknown>,
-  ): Promise<ModelClient> {
-    return new OpencodeClient(credential, options);
-  },
+	async createClient(
+		credential: string,
+		options?: Record<string, unknown>,
+	): Promise<ModelClient> {
+		return new OpencodeClient(credential, options);
+	},
 
-  getCredentialType(): "api-key" | "oauth" | "custom" {
-    return "custom";
-  },
+	getCredentialType(): "api-key" | "oauth" | "custom" {
+		return "custom";
+	},
 };
 
 // ---------------------------------------------------------------------------
@@ -159,122 +174,135 @@ const opencodeProvider: ModelProvider = {
 // ---------------------------------------------------------------------------
 
 class OpencodeClient implements ModelClient {
-  private client: any;
-  private sessionId: string | null = null;
+	private client: OpencodeClientInstance | undefined;
+	private sessionId: string | null = null;
 
-  constructor(
-    private credential: string,
-    private options?: Record<string, unknown>,
-  ) {}
+	constructor(
+		private credential: string,
+		private options?: Record<string, unknown>,
+	) {}
 
-  private async getClient() {
-    if (!this.client) {
-      const opencode = await loadOpencodeSDK();
-      this.client = opencode.createOpencodeClient({
-        baseUrl: this.credential || "http://localhost:4096",
-        ...this.options,
-      });
-    }
-    return this.client;
-  }
+	private async getClient(): Promise<OpencodeClientInstance> {
+		if (!this.client) {
+			const opencode = await loadOpencodeSDK();
+			this.client = opencode.createOpencodeClient({
+				baseUrl: this.credential || "http://localhost:4096",
+				...this.options,
+			});
+		}
+		return this.client;
+	}
 
-  async *query(opts: ModelQueryOptions): AsyncGenerator<unknown> {
-    const client = await this.getClient();
+	async *query(opts: ModelQueryOptions): AsyncGenerator<unknown> {
+		const client = await this.getClient();
 
-    try {
-      if (!this.sessionId) {
-        const session = await client.session.create({
-          body: { title: `WOPR Session ${Date.now()}` },
-        });
-        this.sessionId = session.data?.id;
-        logger.info(`[opencode] Session created: ${this.sessionId}`);
-      }
+		try {
+			if (!this.sessionId) {
+				const session = await client.session.create({
+					body: { title: `WOPR Session ${Date.now()}` },
+				});
+				this.sessionId = session.data?.id ?? null;
+				logger.info(`[opencode] Session created: ${this.sessionId}`);
+			}
 
-      if (!this.sessionId) {
-        throw new Error("Failed to create OpenCode session");
-      }
+			if (!this.sessionId) {
+				throw new Error("Failed to create OpenCode session");
+			}
 
-      yield { type: "system", subtype: "init", session_id: this.sessionId };
+			yield { type: "system", subtype: "init", session_id: this.sessionId };
 
-      let promptText = opts.prompt;
-      if (opts.images && opts.images.length > 0) {
-        const imageList = opts.images.map((url, i) => `[Image ${i + 1}]: ${url}`).join("\n");
-        promptText = `[User has shared ${opts.images.length} image(s)]\n${imageList}\n\n${opts.prompt}`;
-      }
+			let promptText = opts.prompt;
+			if (opts.images && opts.images.length > 0) {
+				const imageList = opts.images
+					.map((url, i) => `[Image ${i + 1}]: ${url}`)
+					.join("\n");
+				promptText = `[User has shared ${opts.images.length} image(s)]\n${imageList}\n\n${opts.prompt}`;
+			}
 
-      const parts: any[] = [{ type: "text", text: promptText }];
+			const parts: { type: string; text?: string }[] = [
+				{ type: "text", text: promptText },
+			];
 
-      const promptOptions: any = {
-        model: opts.model
-          ? { providerID: "anthropic", modelID: opts.model }
-          : { providerID: "anthropic", modelID: opencodeProvider.defaultModel },
-        parts,
-      };
+			const promptOptions: {
+				model?: { providerID: string; modelID: string };
+				parts: { type: string; text?: string }[];
+				enabledTools?: string[];
+			} = {
+				model: opts.model
+					? { providerID: "anthropic", modelID: opts.model }
+					: { providerID: "anthropic", modelID: opencodeProvider.defaultModel },
+				parts,
+			};
 
-      // A2A tools
-      if (opts.a2aServers && Object.keys(opts.a2aServers).length > 0) {
-        const allTools: string[] = [];
-        for (const [serverName, config] of Object.entries(opts.a2aServers)) {
-          for (const tool of config.tools) {
-            allTools.push(`mcp__${serverName}__${tool.name}`);
-          }
-        }
-        promptOptions.enabledTools = allTools;
-        logger.info(`[opencode] A2A tools configured: ${allTools.join(", ")}`);
-      }
+			// A2A tools
+			if (opts.a2aServers && Object.keys(opts.a2aServers).length > 0) {
+				const allTools: string[] = [];
+				for (const [serverName, config] of Object.entries(opts.a2aServers)) {
+					for (const tool of config.tools) {
+						allTools.push(`mcp__${serverName}__${tool.name}`);
+					}
+				}
+				promptOptions.enabledTools = allTools;
+				logger.info(`[opencode] A2A tools configured: ${allTools.join(", ")}`);
+			}
 
-      // Allowed tools
-      if (opts.allowedTools && opts.allowedTools.length > 0) {
-        promptOptions.enabledTools = [...(promptOptions.enabledTools || []), ...opts.allowedTools];
-        logger.info(`[opencode] Allowed tools: ${opts.allowedTools.join(", ")}`);
-      }
+			// Allowed tools
+			if (opts.allowedTools && opts.allowedTools.length > 0) {
+				promptOptions.enabledTools = [
+					...(promptOptions.enabledTools || []),
+					...opts.allowedTools,
+				];
+				logger.info(
+					`[opencode] Allowed tools: ${opts.allowedTools.join(", ")}`,
+				);
+			}
 
-      const result = await client.session.prompt({
-        path: { id: this.sessionId },
-        body: promptOptions,
-      });
+			const result = await client.session.prompt({
+				path: { id: this.sessionId },
+				body: promptOptions,
+			});
 
-      if (result.data) {
-        const resultParts = result.data.parts || [];
+			if (result.data) {
+				const resultParts = result.data.parts || [];
 
-        for (const part of resultParts) {
-          if (part.type === "text") {
-            yield {
-              type: "assistant",
-              message: { content: [{ type: "text", text: part.text }] },
-            };
-          } else if (part.type === "tool_use" || part.type === "tool_call") {
-            yield {
-              type: "assistant",
-              message: { content: [{ type: "tool_use", name: part.name }] },
-            };
-          }
-        }
+				for (const part of resultParts) {
+					if (part.type === "text") {
+						yield {
+							type: "assistant",
+							message: { content: [{ type: "text", text: part.text }] },
+						};
+					} else if (part.type === "tool_use" || part.type === "tool_call") {
+						yield {
+							type: "assistant",
+							message: { content: [{ type: "tool_use", name: part.name }] },
+						};
+					}
+				}
 
-        yield { type: "result", subtype: "success", total_cost_usd: 0 };
-      }
-    } catch (error) {
-      logger.error("[opencode] Query failed:", error);
-      throw new Error(
-        `OpenCode query failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
+				yield { type: "result", subtype: "success", total_cost_usd: 0 };
+			}
+		} catch (error) {
+			logger.error("[opencode] Query failed:", error);
+			throw new Error(
+				`OpenCode query failed: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
 
-  async listModels(): Promise<string[]> {
-    return opencodeProvider.supportedModels;
-  }
+	async listModels(): Promise<string[]> {
+		return opencodeProvider.supportedModels;
+	}
 
-  async healthCheck(): Promise<boolean> {
-    try {
-      const client = await this.getClient();
-      const health = await client.global.health();
-      return health.data?.healthy === true;
-    } catch (error) {
-      logger.error("[opencode] Health check failed:", error);
-      return false;
-    }
-  }
+	async healthCheck(): Promise<boolean> {
+		try {
+			const client = await this.getClient();
+			const health = await client.global.health();
+			return health.data?.healthy === true;
+		} catch (error) {
+			logger.error("[opencode] Health check failed:", error);
+			return false;
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -282,21 +310,21 @@ class OpencodeClient implements ModelClient {
 // ---------------------------------------------------------------------------
 
 const manifest: PluginManifest = {
-  name: "wopr-plugin-provider-opencode",
-  version: "1.1.0",
-  description: "OpenCode AI provider for WOPR with A2A/MCP support",
-  author: "WOPR",
-  license: "MIT",
-  repository: "https://github.com/wopr-network/wopr-plugin-provider-opencode",
-  capabilities: ["provider"],
-  category: "ai-provider",
-  tags: ["ai", "opencode", "provider", "a2a", "mcp"],
-  icon: "🤖",
-  requires: {
-    network: { outbound: true },
-    services: ["opencode"],
-  },
-  configSchema,
+	name: "wopr-plugin-provider-opencode",
+	version: "1.1.0",
+	description: "OpenCode AI provider for WOPR with A2A/MCP support",
+	author: "WOPR",
+	license: "MIT",
+	repository: "https://github.com/wopr-network/wopr-plugin-provider-opencode",
+	capabilities: ["provider"],
+	category: "ai-provider",
+	tags: ["ai", "opencode", "provider", "a2a", "mcp"],
+	icon: "🤖",
+	requires: {
+		network: { outbound: true },
+		services: ["opencode"],
+	},
+	configSchema,
 };
 
 // ---------------------------------------------------------------------------
@@ -304,23 +332,23 @@ const manifest: PluginManifest = {
 // ---------------------------------------------------------------------------
 
 const plugin: WOPRPlugin = {
-  name: "provider-opencode",
-  version: "1.1.0",
-  description: "OpenCode AI provider for WOPR with A2A/MCP support",
-  manifest,
+	name: "provider-opencode",
+	version: "1.1.0",
+	description: "OpenCode AI provider for WOPR with A2A/MCP support",
+	manifest,
 
-  async init(ctx: WOPRPluginContext) {
-    ctx.log.info("Registering OpenCode provider...");
-    ctx.registerProvider(opencodeProvider);
-    ctx.log.info("OpenCode provider registered (supports A2A/MCP)");
+	async init(ctx: WOPRPluginContext) {
+		ctx.log.info("Registering OpenCode provider...");
+		ctx.registerLLMProvider(opencodeProvider);
+		ctx.log.info("OpenCode provider registered (supports A2A/MCP)");
 
-    ctx.registerConfigSchema("provider-opencode", configSchema);
-    ctx.log.info("Registered OpenCode config schema");
-  },
+		ctx.registerConfigSchema("provider-opencode", configSchema);
+		ctx.log.info("Registered OpenCode config schema");
+	},
 
-  async shutdown() {
-    logger.info("[provider-opencode] Shutting down");
-  },
+	async shutdown() {
+		logger.info("[provider-opencode] Shutting down");
+	},
 };
 
 export default plugin;
