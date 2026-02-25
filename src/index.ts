@@ -74,6 +74,9 @@ const logger = winston.createLogger({
 	transports: [new winston.transports.Console({ level: "warn" })],
 });
 
+let ctx: WOPRPluginContext | null = null;
+const cleanups: Array<() => void> = [];
+
 // ---------------------------------------------------------------------------
 // OpenCode SDK lazy-loader
 // ---------------------------------------------------------------------------
@@ -151,7 +154,7 @@ const opencodeProvider: ModelProvider = {
 			});
 			const health = await client.global.health();
 			return health.data?.healthy === true;
-		} catch (error) {
+		} catch (error: unknown) {
 			logger.error("[opencode] Credential validation failed:", error);
 			return true; // Allow anyway, server might not be running yet
 		}
@@ -281,7 +284,7 @@ class OpencodeClient implements ModelClient {
 
 				yield { type: "result", subtype: "success", total_cost_usd: 0 };
 			}
-		} catch (error) {
+		} catch (error: unknown) {
 			logger.error("[opencode] Query failed:", error);
 			throw new Error(
 				`OpenCode query failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -298,7 +301,7 @@ class OpencodeClient implements ModelClient {
 			const client = await this.getClient();
 			const health = await client.global.health();
 			return health.data?.healthy === true;
-		} catch (error) {
+		} catch (error: unknown) {
 			logger.error("[opencode] Health check failed:", error);
 			return false;
 		}
@@ -324,6 +327,21 @@ const manifest: PluginManifest = {
 		network: { outbound: true },
 		services: ["opencode"],
 	},
+	provides: {
+		capabilities: [
+			{
+				type: "llm",
+				id: "opencode",
+				displayName: "OpenCode AI",
+				tier: "byok",
+				configSchema,
+			},
+		],
+	},
+	lifecycle: {
+		shutdownBehavior: "graceful",
+		hotReload: false,
+	},
 	configSchema,
 };
 
@@ -337,16 +355,28 @@ const plugin: WOPRPlugin = {
 	description: "OpenCode AI provider for WOPR with A2A/MCP support",
 	manifest,
 
-	async init(ctx: WOPRPluginContext) {
+	async init(pluginCtx: WOPRPluginContext) {
+		ctx = pluginCtx;
 		ctx.log.info("Registering OpenCode provider...");
 		ctx.registerLLMProvider(opencodeProvider);
+		cleanups.push(() => ctx?.unregisterLLMProvider("opencode"));
 		ctx.log.info("OpenCode provider registered (supports A2A/MCP)");
 
 		ctx.registerConfigSchema("provider-opencode", configSchema);
+		cleanups.push(() => ctx?.unregisterConfigSchema("provider-opencode"));
 		ctx.log.info("Registered OpenCode config schema");
 	},
 
 	async shutdown() {
+		for (const cleanup of cleanups.reverse()) {
+			try {
+				cleanup();
+			} catch (_error: unknown) {
+				// Best-effort cleanup
+			}
+		}
+		cleanups.length = 0;
+		ctx = null;
 		logger.info("[provider-opencode] Shutting down");
 	},
 };
