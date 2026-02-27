@@ -156,7 +156,7 @@ const opencodeProvider: ModelProvider = {
 			return health.data?.healthy === true;
 		} catch (error: unknown) {
 			logger.error("[opencode] Credential validation failed:", error);
-			return true; // Allow anyway, server might not be running yet
+			return false;
 		}
 	},
 
