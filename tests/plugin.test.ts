@@ -57,19 +57,19 @@ describe("wopr-plugin-provider-opencode", () => {
       expect(plugin.description).toContain("OpenCode");
     });
 
-    it("should call registerLLMProvider on init", async () => {
+    it("should call registerProvider on init", async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
 
       await plugin.init(ctx);
 
-      expect(ctx.registerLLMProvider).toHaveBeenCalledTimes(1);
-      const provider = ctx.registerLLMProvider.mock.calls[0][0];
+      expect(ctx.registerProvider).toHaveBeenCalledTimes(1);
+      const provider = ctx.registerProvider.mock.calls[0][0];
       expect(provider.id).toBe("opencode");
       expect(provider.name).toBe("OpenCode");
     });
@@ -77,8 +77,8 @@ describe("wopr-plugin-provider-opencode", () => {
     it("should call registerConfigSchema on init", async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
@@ -95,8 +95,8 @@ describe("wopr-plugin-provider-opencode", () => {
     it("should log messages during init", async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
@@ -113,8 +113,8 @@ describe("wopr-plugin-provider-opencode", () => {
     it("should unregister provider and config on shutdown", async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
@@ -122,15 +122,15 @@ describe("wopr-plugin-provider-opencode", () => {
       await plugin.init(ctx);
       await plugin.shutdown();
 
-      expect(ctx.unregisterLLMProvider).toHaveBeenCalledWith("opencode");
+      expect(ctx.unregisterProvider).toHaveBeenCalledWith("opencode");
       expect(ctx.unregisterConfigSchema).toHaveBeenCalledWith("provider-opencode");
     });
 
     it("should be idempotent on double shutdown", async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
@@ -140,7 +140,7 @@ describe("wopr-plugin-provider-opencode", () => {
       await plugin.shutdown();
 
       // Second shutdown should not throw, cleanups already drained
-      expect(ctx.unregisterLLMProvider).toHaveBeenCalledTimes(1);
+      expect(ctx.unregisterProvider).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -148,8 +148,8 @@ describe("wopr-plugin-provider-opencode", () => {
     it("should register config with required fields", async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
@@ -166,8 +166,8 @@ describe("wopr-plugin-provider-opencode", () => {
     it("should have a serverUrl field marked as required", async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
@@ -187,8 +187,8 @@ describe("wopr-plugin-provider-opencode", () => {
     it("should have a model select field with supported models", async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
@@ -214,14 +214,14 @@ describe("wopr-plugin-provider-opencode", () => {
     beforeEach(async () => {
       const ctx = {
         log: { info: vi.fn() },
-        registerLLMProvider: vi.fn(),
-        unregisterLLMProvider: vi.fn(),
+        registerProvider: vi.fn(),
+        unregisterProvider: vi.fn(),
         registerConfigSchema: vi.fn(),
         unregisterConfigSchema: vi.fn(),
       };
 
       await plugin.init(ctx);
-      provider = ctx.registerLLMProvider.mock.calls[0][0];
+      provider = ctx.registerProvider.mock.calls[0][0];
     });
 
     it("should have correct provider properties", () => {
