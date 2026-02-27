@@ -333,7 +333,6 @@ const manifest: PluginManifest = {
 				type: "llm",
 				id: "opencode",
 				displayName: "OpenCode AI",
-				tier: "byok",
 				configSchema,
 			},
 		],
@@ -358,8 +357,8 @@ const plugin: WOPRPlugin = {
 	async init(pluginCtx: WOPRPluginContext) {
 		ctx = pluginCtx;
 		ctx.log.info("Registering OpenCode provider...");
-		ctx.registerLLMProvider(opencodeProvider);
-		cleanups.push(() => ctx?.unregisterLLMProvider("opencode"));
+		ctx.registerProvider(opencodeProvider);
+		cleanups.push(() => ctx?.unregisterProvider("opencode"));
 		ctx.log.info("OpenCode provider registered (supports A2A/MCP)");
 
 		ctx.registerConfigSchema("provider-opencode", configSchema);
