@@ -79,7 +79,7 @@ async function loadOpencodeSDK() {
     try {
       const opencode = await import("@opencode-ai/sdk");
       OpencodeSDK = opencode;
-    } catch (_error) {
+    } catch (_error: unknown) {
       throw new Error("OpenCode SDK not installed. Run: npm install @opencode-ai/sdk");
     }
   }
@@ -303,6 +303,7 @@ const manifest: PluginManifest = {
         type: "llm",
         id: "opencode",
         displayName: "OpenCode AI",
+        tier: "byok",
         configSchema,
       },
     ],
@@ -327,8 +328,8 @@ const plugin: WOPRPlugin = {
   async init(pluginCtx: WOPRPluginContext) {
     ctx = pluginCtx;
     ctx.log.info("Registering OpenCode provider...");
-    ctx.registerProvider(opencodeProvider);
-    cleanups.push(() => ctx?.unregisterProvider("opencode"));
+    ctx.registerLLMProvider(opencodeProvider);
+    cleanups.push(() => ctx?.unregisterLLMProvider("opencode"));
     ctx.log.info("OpenCode provider registered (supports A2A/MCP)");
 
     ctx.registerConfigSchema("provider-opencode", configSchema);
