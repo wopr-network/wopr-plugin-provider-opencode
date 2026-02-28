@@ -203,14 +203,19 @@ class OpencodeClient implements ModelClient {
 
       const parts: { type: string; text?: string }[] = [{ type: "text", text: promptText }];
 
+      const resolveProviderID = (modelID: string): string => {
+        if (modelID.startsWith("gpt-") || modelID.startsWith("o1") || modelID.startsWith("o3")) return "openai";
+        if (modelID.startsWith("gemini-")) return "google";
+        return "anthropic";
+      };
+
+      const selectedModel = opts.model ?? opencodeProvider.defaultModel;
       const promptOptions: {
         model?: { providerID: string; modelID: string };
         parts: { type: string; text?: string }[];
         enabledTools?: string[];
       } = {
-        model: opts.model
-          ? { providerID: "anthropic", modelID: opts.model }
-          : { providerID: "anthropic", modelID: opencodeProvider.defaultModel },
+        model: { providerID: resolveProviderID(selectedModel), modelID: selectedModel },
         parts,
       };
 
