@@ -1,7 +1,10 @@
-[config]
-auto_review = true
-# auto_improve disabled: this repo's Auto Fix workflow also has contents:write and pushes commits
-# to PR branches; two concurrent writers cause race conditions and merge conflicts. Qodo review
-# comments are sufficient — Claude's auto-fix workflow acts on them.
-auto_improve = false
-auto_describe = true
+[github_app]
+pr_commands = [
+  "/describe",
+  "/review",
+  "/improve",
+]
+push_commands = [
+  "/review",
+  "/improve",
+]
