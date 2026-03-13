@@ -32,8 +32,8 @@ importers:
         version: 4.0.18(@types/node@25.3.5)
     optionalDependencies:
       '@opencode-ai/sdk':
-        specifier: ^1.2.20
-        version: 1.2.20
+        specifier: ^1.2.26
+        version: 1.2.26
 
 packages:
 
@@ -256,8 +256,8 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@opencode-ai/sdk@1.2.20':
-    resolution: {integrity: sha512-U5ROpG21D8jg9rkc1IgKAk1g5dn6X/rkOBfveupd0peSDO9n6VM9aikYccVLaMObxVqdjtG08IeQOFTPVS8ySQ==}
+  '@opencode-ai/sdk@1.2.26':
+    resolution: {integrity: sha512-HPB+0pfvTMPj2KEjNLF3oqgldKW8koTJ7ssqXwzndazqxS+gUynzvdIKIQP4+QIInNcc5nJMG9JtfLcePGgTLQ==}
 
   '@rollup/rollup-android-arm-eabi@4.57.1':
     resolution: {integrity: sha512-A6ehUVSiSaaliTxai040ZpZ2zTevHYbvu/lDoeAteHI8QnaosIzm4qwtezfRg1jOYaUmnzLX1AOD6Z+UJjtifg==}
@@ -1176,7 +1176,7 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@opencode-ai/sdk@1.2.20':
+  '@opencode-ai/sdk@1.2.26':
     optional: true
 
   '@rollup/rollup-android-arm-eabi@4.57.1':
